@@ -1,0 +1,44 @@
+image: maven:latest
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+stages:
+  - install
+  - prepare
+  - test
+  - deploy
+
+maven_install:
+  stage: install
+  script:
+    - mvn clean install -Dmbrowser=headless -Dmenv=staging -Dmtestplan="$TESTPLAN" -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+
+prepare:
+  stage: prepare
+  script:
+    - java -cp "target/xray-framework-1.0-tests.jar;target/xray-framework-1.0-jar-with-dependencies.jar" com.ugasoft.xray_helper.test_plan_preparer.XrayTestParser "$TESTPLAN"
+  artifacts:
+    paths:
+      - src/test/resources
+
+maven_test:
+  stage: test
+  script:
+    - mvn test -Dmbrowser=headless -Dmenv=staging -Dmtestplan="$TESTPLAN"
+  artifacts:
+    paths:
+      - target/surefire-reports/xray-report.json
+
+import_results:
+  stage: deploy
+  script:
+    - |
+      ./import_gitlab_results.sh
+      echo "done"
+  dependencies:
+    - maven_test
